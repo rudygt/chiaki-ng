@@ -402,55 +402,55 @@ PadOutput ComputePad(const std::array<bool, ActionCount> &held, double walk_scal
 
 const char *DefaultProfileText()
 {
-	return R"INI(; Профиль клавиатуры и мыши для chiaki-ng (режим прицеливания мышью).
+	return R"INI(; Keyboard + mouse profile for chiaki-ng (mouse aim mode).
 ;
-; F8  - захватить / отпустить мышь (в захвате работает прицеливание)
-; F9  - чувствительность -10%,  F10 - чувствительность +10% (сохраняется в этот файл)
-; Левый клик по окну стрима тоже захватывает мышь (см. click_to_capture).
-; Изменения в файле применяются при следующем захвате мыши (F8 два раза).
+; F8  - capture / release the mouse (mouse aim works while captured)
+; F9  - sensitivity -10%,  F10 - sensitivity +10% (saved to this file)
+; A left click on the stream window also captures the mouse (see click_to_capture).
+; Edits to this file apply the next time the mouse is captured (press F8 twice).
 ;
-; Раскладка ниже - стартовая, в стиле GTA. Проверьте её по схеме управления
-; в настройках самой игры и поменяйте под себя.
+; The layout below is a GTA-style starting point. Check it against the game's
+; controller layout and change it to suit you.
 
 [general]
 click_to_capture = true
 
 [mouse]
-; Отклонение стика (0..1) на 1 отсчёт мыши в миллисекунду. Главный параметр.
+; Stick deflection (0..1) per mouse count per millisecond. The main setting.
 sensitivity = 0.12
-; Кривая отклика: 1.0 - линейная, больше 1 - точнее на малых движениях.
+; Response curve: 1.0 = linear, above 1 = finer control for small movements.
 exponent = 1.0
-; Минимальное отклонение стика при любом движении мыши (перепрыгивает мёртвую зону игры).
-; Если камера "залипает" на медленных движениях - увеличьте; если дрожит - уменьшите.
+; Minimum stick deflection whenever the mouse moves (jumps over the game's deadzone).
+; If the camera sticks on slow movements, raise it; if it jitters, lower it.
 anti_deadzone = 0.18
 max_output = 1.0
-; Окно сглаживания скорости мыши, мс. Больше - плавнее, но камера дольше "доезжает".
+; Mouse speed smoothing window, ms. Larger = smoother, but the camera glides longer.
 smoothing_ms = 12
-; Множитель вертикали и инверсия.
+; Vertical multiplier and inversion.
 y_scale = 1.0
 invert_y = false
-; Множитель чувствительности, пока зажат L2 (прицеливание).
+; Sensitivity multiplier while L2 (aim) is held.
 ads_scale = 1.0
-; Отклонение левого стика при зажатом модификаторе "walk" (шаг).
+; Left stick deflection while the "walk" modifier is held.
 walk_scale = 0.45
 update_interval_ms = 4
 
 [bindings]
-; действие = клавиша[, клавиша ...]
-; Клавиши: A..Z, 0..9, F1..F12, Space, Tab, Enter, Esc, Backspace, Shift, Ctrl, Alt,
-;          CapsLock, Up, Down, Left, Right, Insert, Delete, Home, End, PageUp, PageDown
-; Мышь:    MouseLeft, MouseRight, MouseMiddle, MouseBack, MouseForward, WheelUp, WheelDown
-; F8, F9, F10, F11 заняты служебными функциями.
+; action = key[, key ...]
+; Keys:  A..Z, 0..9, F1..F12, Space, Tab, Enter, Esc, Backspace, Shift, Ctrl, Alt,
+;        CapsLock, Up, Down, Left, Right, Insert, Delete, Home, End, PageUp, PageDown
+; Mouse: MouseLeft, MouseRight, MouseMiddle, MouseBack, MouseForward, WheelUp, WheelDown
+; F8, F9, F10 and F11 are reserved for the controls above and fullscreen.
 ;
-; Действия: cross circle square triangle l1 r1 l2 r2 l3 r3 options create touchpad ps
-;           dpad_up dpad_down dpad_left dpad_right ls_up ls_down ls_left ls_right
-;           rs_up rs_down rs_left rs_right walk
+; Actions: cross circle square triangle l1 r1 l2 r2 l3 r3 options create touchpad ps
+;          dpad_up dpad_down dpad_left dpad_right ls_up ls_down ls_left ls_right
+;          rs_up rs_down rs_left rs_right walk
 
 ls_up = W
 ls_down = S
 ls_left = A
 ls_right = D
-; Alt лучше не использовать: в Windows отпускание Alt может активировать меню окна.
+; Avoid Alt: on Windows, releasing Alt can open the window menu.
 walk = CapsLock
 
 r2 = MouseLeft
@@ -475,7 +475,7 @@ options = Esc, P
 create = F12
 ps = Home
 
-; камера с клавиатуры (на всякий случай)
+; keyboard camera control (fallback)
 rs_up = I
 rs_down = K
 rs_left = J
