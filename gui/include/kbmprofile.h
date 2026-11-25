@@ -11,6 +11,7 @@
 #include <deque>
 #include <optional>
 #include <string>
+#include <unordered_map>
 #include <vector>
 
 namespace kbm
@@ -25,6 +26,8 @@ enum class Action
 	LsUp, LsDown, LsLeft, LsRight,
 	RsUp, RsDown, RsLeft, RsRight,
 	Walk,
+	// switches between the [bindings] (on foot) and [vehicle] layers; sends nothing to the console
+	VehicleToggle,
 	Count
 };
 
@@ -89,6 +92,8 @@ struct Profile
 	AimConfig aim;
 	bool click_to_capture = true;
 	std::vector<Binding> bindings;
+	// Replace the on-foot actions of the inputs they name while the vehicle layer is on.
+	std::vector<Binding> vehicle_bindings;
 	std::vector<std::string> warnings;
 };
 
@@ -122,6 +127,27 @@ struct PadOutput
 };
 
 PadOutput ComputePad(const std::array<bool, ActionCount> &held, double walk_scale);
+
+// Input code (key or mouse input) -> actions it triggers.
+using BindingMap = std::unordered_map<int, std::vector<Action>>;
+
+// Actions triggered by the held inputs. In vehicle mode an input bound in `vehicle`
+// triggers only its vehicle actions; every other input keeps its on-foot actions.
+std::array<bool, ActionCount> HeldActions(const std::vector<int> &held_inputs,
+		const BindingMap &on_foot, const BindingMap &vehicle, bool vehicle_mode);
+
+// Flips the vehicle layer on each press of a vehicle_toggle input.
+class VehicleLayer
+{
+	public:
+		bool Active() const { return active; }
+		// Returns true when the layer changed.
+		bool Update(bool toggle_held);
+
+	private:
+		bool active = false;
+		bool toggle_was_held = false;
+};
 
 } // namespace kbm
 

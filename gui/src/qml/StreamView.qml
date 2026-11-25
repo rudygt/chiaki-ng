@@ -303,6 +303,31 @@ Item {
         }
     }
 
+    // keyboard + mouse vehicle layer (kbm_profile.ini [vehicle])
+    Rectangle {
+        anchors {
+            left: parent.left
+            top: parent.top
+            margins: 20
+        }
+        width: kbmVehicleLabel.implicitWidth + 28
+        height: kbmVehicleLabel.implicitHeight + 14
+        radius: height / 2
+        color: Material.accent
+        opacity: Chiaki.session?.kbmVehicle ? 0.8 : 0.0
+        visible: opacity
+
+        Behavior on opacity { NumberAnimation { duration: 150 } }
+
+        Label {
+            id: kbmVehicleLabel
+            anchors.centerIn: parent
+            text: qsTr("Vehicle controls")
+            color: "white"
+            font.bold: true
+        }
+    }
+
     Component {
         id: streamStatsContent
         Item {

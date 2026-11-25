@@ -197,9 +197,80 @@ static void TestComputePad()
 	CHECK(std::abs(o.left_y + 16384) <= 1);
 }
 
+static void TestVehicleLayerParsesAndOverrides()
+{
+	Profile p = ParseProfile(
+		"[bindings]\n"
+		"ls_up = W\n"
+		"r2 = MouseLeft\n"
+		"triangle = F\n"
+		"vehicle_toggle = F, V\n"
+		"[vehicle]\n"
+		"r2 = W\n"
+		"bogus = X\n");
+	CHECK(p.warnings.size() == 1);
+	CHECK(p.vehicle_bindings.size() == 1);
+	CHECK(p.vehicle_bindings[0].action == Action::R2 && p.vehicle_bindings[0].input == "W");
+
+	const int W = 1, F = 2, V = 3, MouseLeft = 4;
+	BindingMap foot = {
+		{ W, { Action::LsUp } },
+		{ MouseLeft, { Action::R2 } },
+		{ F, { Action::Triangle, Action::VehicleToggle } },
+		{ V, { Action::VehicleToggle } },
+	};
+	BindingMap vehicle = { { W, { Action::R2 } } };
+	auto is = [](const std::array<bool, ActionCount> &held, Action a) { return held[static_cast<size_t>(a)]; };
+
+	// on foot W walks; in the vehicle layer W only accelerates
+	auto h = HeldActions({ W }, foot, vehicle, false);
+	CHECK(is(h, Action::LsUp) && !is(h, Action::R2));
+	h = HeldActions({ W }, foot, vehicle, true);
+	CHECK(is(h, Action::R2) && !is(h, Action::LsUp));
+	// keys missing from the vehicle layer keep their on-foot actions
+	h = HeldActions({ MouseLeft, F }, foot, vehicle, true);
+	CHECK(is(h, Action::R2) && is(h, Action::Triangle) && is(h, Action::VehicleToggle));
+	CHECK(!is(HeldActions({ 99 }, foot, vehicle, true), Action::R2));
+}
+
+static void TestVehicleLayerTogglesOncePerPress()
+{
+	VehicleLayer layer;
+	CHECK(!layer.Active());
+	CHECK(layer.Update(true));   // press
+	CHECK(layer.Active());
+	CHECK(!layer.Update(true));  // still held: no repeat
+	CHECK(layer.Active());
+	CHECK(!layer.Update(false)); // release
+	CHECK(layer.Update(true));   // second press
+	CHECK(!layer.Active());
+}
+
+static void TestDefaultProfileDrivesWithW()
+{
+	Profile p = ParseProfile(DefaultProfileText());
+	bool w_walks = false, w_accelerates = false, f_toggles_in_car = false;
+	for(const auto &b : p.bindings)
+		if(b.input == "W" && b.action == Action::LsUp)
+			w_walks = true;
+	for(const auto &b : p.vehicle_bindings)
+	{
+		if(b.input == "W" && b.action == Action::R2)
+			w_accelerates = true;
+		if(b.input == "F" && b.action == Action::VehicleToggle)
+			f_toggles_in_car = true;
+	}
+	CHECK(w_walks);
+	CHECK(w_accelerates);
+	CHECK(f_toggles_in_car);
+}
+
 int main()
 {
 	TestDefaultProfileParses();
+	TestVehicleLayerParsesAndOverrides();
+	TestVehicleLayerTogglesOncePerPress();
+	TestDefaultProfileDrivesWithW();
 	TestProfileWarningsAndClamping();
 	TestIniSetPreservesComments();
 	TestAimMapperIdleIsCentered();

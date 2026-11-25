@@ -162,6 +162,7 @@ class StreamSession : public QObject
 	Q_PROPERTY(bool muted READ GetMuted WRITE SetMuted NOTIFY MutedChanged)
 	Q_PROPERTY(bool cantDisplay READ GetCantDisplay NOTIFY CantDisplayChanged)
 	Q_PROPERTY(int framesLost READ GetFramesLost NOTIFY FramesLostChanged)
+	Q_PROPERTY(bool kbmVehicle READ KbmVehicle NOTIFY KbmVehicleChanged)
 
 	private:
 		SessionLog log;
@@ -331,7 +332,9 @@ class StreamSession : public QObject
 		bool kbm_active = false;
 		kbm::Profile kbm_profile;
 		kbm::AimMapper kbm_aim;
-		QHash<int, QList<kbm::Action>> kbm_bindings;
+		kbm::BindingMap kbm_bindings;
+		kbm::BindingMap kbm_vehicle_bindings;
+		kbm::VehicleLayer kbm_vehicle;
 		QSet<int> kbm_held_inputs;
 		kbm::PadOutput kbm_pad;
 		int16_t kbm_aim_x = 0, kbm_aim_y = 0;
@@ -402,6 +405,7 @@ class StreamSession : public QObject
 
 		bool KbmActive() const { return kbm_active; }
 		bool KbmClickToCapture() const { return kbm_profile.click_to_capture; }
+		bool KbmVehicle() const { return kbm_vehicle.Active(); }
 		void SetKbmActive(bool active);
 		void HandleKbmMouseDelta(double dx, double dy);
 		void HandleKbmMouseButton(Qt::MouseButton button, bool pressed);
@@ -433,6 +437,7 @@ class StreamSession : public QObject
 		void AveragePacketLossChanged();
 		void FramesLostChanged();
 		void MutedChanged();
+		void KbmVehicleChanged();
 		void CantDisplayChanged(bool cant_display);
 		void FecFailure();
 

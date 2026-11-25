@@ -1047,22 +1047,27 @@ void StreamSession::KbmLoadProfile()
 	for(const auto &warning : kbm_profile.warnings)
 		CHIAKI_LOGW(GetChiakiLog(), "KBM profile %s: %s", path.constData(), warning.c_str());
 
-	kbm_bindings.clear();
-	for(const auto &binding : kbm_profile.bindings)
-	{
-		int code = kbm::ResolveInputName(QString::fromStdString(binding.input));
-		if(!code)
+	auto resolve = [&](const std::vector<kbm::Binding> &bindings, kbm::BindingMap *out) {
+		out->clear();
+		for(const auto &binding : bindings)
 		{
-			CHIAKI_LOGW(GetChiakiLog(), "KBM profile %s: unknown key or mouse input \"%s\" for %s",
-					path.constData(), binding.input.c_str(), kbm::ActionName(binding.action));
-			continue;
+			int code = kbm::ResolveInputName(QString::fromStdString(binding.input));
+			if(!code)
+			{
+				CHIAKI_LOGW(GetChiakiLog(), "KBM profile %s: unknown key or mouse input \"%s\" for %s",
+						path.constData(), binding.input.c_str(), kbm::ActionName(binding.action));
+				continue;
+			}
+			(*out)[code].push_back(binding.action);
 		}
-		kbm_bindings[code].append(binding.action);
-	}
+	};
+	resolve(kbm_profile.bindings, &kbm_bindings);
+	resolve(kbm_profile.vehicle_bindings, &kbm_vehicle_bindings);
 
 	kbm_aim.Configure(kbm_profile.aim);
 	kbm_timer->setInterval(qMax(1, static_cast<int>(std::lround(kbm_profile.aim.update_interval_ms))));
-	CHIAKI_LOGI(GetChiakiLog(), "KBM profile loaded from %s (%d inputs bound)", path.constData(), static_cast<int>(kbm_bindings.size()));
+	CHIAKI_LOGI(GetChiakiLog(), "KBM profile loaded from %s (%d inputs bound, %d in the vehicle layer)", path.constData(),
+			static_cast<int>(kbm_bindings.size()), static_cast<int>(kbm_vehicle_bindings.size()));
 }
 
 void StreamSession::SetKbmActive(bool active)
@@ -1102,14 +1107,13 @@ void StreamSession::SetKbmActive(bool active)
 
 void StreamSession::KbmRecompute()
 {
-	std::array<bool, kbm::ActionCount> held = {};
-	for(int code : std::as_const(kbm_held_inputs))
+	const std::vector<int> inputs(kbm_held_inputs.cbegin(), kbm_held_inputs.cend());
+	auto held = kbm::HeldActions(inputs, kbm_bindings, kbm_vehicle_bindings, kbm_vehicle.Active());
+	if(kbm_vehicle.Update(held[static_cast<size_t>(kbm::Action::VehicleToggle)]))
 	{
-		auto it = kbm_bindings.constFind(code);
-		if(it == kbm_bindings.constEnd())
-			continue;
-		for(kbm::Action action : it.value())
-			held[static_cast<size_t>(action)] = true;
+		CHIAKI_LOGI(GetChiakiLog(), kbm_vehicle.Active() ? "KBM vehicle layer on" : "KBM vehicle layer off");
+		emit KbmVehicleChanged();
+		held = kbm::HeldActions(inputs, kbm_bindings, kbm_vehicle_bindings, kbm_vehicle.Active());
 	}
 	kbm_pad = kbm::ComputePad(held, kbm_profile.aim.walk_scale);
 	KbmApplyState();
@@ -1175,7 +1179,7 @@ void StreamSession::HandleKbmWheel(int angle_delta_y)
 	kbm_wheel_accum += angle_delta_y;
 
 	auto queue = [this](KbmWheelPulse *pulse, int code) {
-		if(!kbm_bindings.contains(code))
+		if(!kbm_bindings.count(code) && !(kbm_vehicle.Active() && kbm_vehicle_bindings.count(code)))
 			return;
 		pulse->pending = qMin(pulse->pending + 1, KBM_WHEEL_MAX_PENDING);
 		if(!pulse->timer->isActive())

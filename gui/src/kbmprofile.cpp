@@ -49,6 +49,7 @@ const ActionInfo action_infos[] = {
 	{ Action::RsLeft, "rs_left" },
 	{ Action::RsRight, "rs_right" },
 	{ Action::Walk, "walk" },
+	{ Action::VehicleToggle, "vehicle_toggle" },
 };
 
 static_assert(sizeof(action_infos) / sizeof(action_infos[0]) == ActionCount, "every action needs a name");
@@ -291,18 +292,50 @@ Profile ParseProfile(const std::string &text)
 	read_bool("mouse", "invert_y", &aim.invert_y);
 	read_bool("general", "click_to_capture", &profile.click_to_capture);
 
-	for(const auto &[key, value] : doc.Entries("bindings"))
-	{
-		auto action = ParseActionName(key);
-		if(!action)
+	auto read_bindings = [&](const char *section, std::vector<Binding> *out) {
+		for(const auto &[key, value] : doc.Entries(section))
 		{
-			profile.warnings.push_back("[bindings] unknown action: " + key);
-			continue;
+			auto action = ParseActionName(key);
+			if(!action)
+			{
+				profile.warnings.push_back(std::string("[") + section + "] unknown action: " + key);
+				continue;
+			}
+			for(const auto &input : SplitList(value))
+				out->push_back({ input, *action });
 		}
-		for(const auto &input : SplitList(value))
-			profile.bindings.push_back({ input, *action });
-	}
+	};
+	read_bindings("bindings", &profile.bindings);
+	read_bindings("vehicle", &profile.vehicle_bindings);
 	return profile;
+}
+
+std::array<bool, ActionCount> HeldActions(const std::vector<int> &held_inputs,
+		const BindingMap &on_foot, const BindingMap &vehicle, bool vehicle_mode)
+{
+	std::array<bool, ActionCount> held = {};
+	for(int input : held_inputs)
+	{
+		auto it = vehicle_mode ? vehicle.find(input) : vehicle.end();
+		if(it == vehicle.end())
+		{
+			it = on_foot.find(input);
+			if(it == on_foot.end())
+				continue;
+		}
+		for(Action action : it->second)
+			held[static_cast<size_t>(action)] = true;
+	}
+	return held;
+}
+
+bool VehicleLayer::Update(bool toggle_held)
+{
+	bool pressed = toggle_held && !toggle_was_held;
+	toggle_was_held = toggle_held;
+	if(pressed)
+		active = !active;
+	return pressed;
 }
 
 void AimMapper::Reset()
@@ -409,8 +442,11 @@ const char *DefaultProfileText()
 ; A left click on the stream window also captures the mouse (see click_to_capture).
 ; Edits to this file apply the next time the mouse is captured (press F8 twice).
 ;
-; The layout below is a GTA-style starting point. Check it against the game's
-; controller layout and change it to suit you.
+; The layout below follows GTA 6's Default control scheme on PS5, with keys
+; placed like GTA on PC. GTA 6 accelerates with R2 and brakes with L2, so W and S
+; cannot be the same buttons on foot and in a car: [bindings] is the on-foot
+; layer and [vehicle] switches W / S and a few other keys while you drive.
+; "Vehicle controls" shows in the top-left corner while the vehicle layer is on.
 
 [general]
 click_to_capture = true
@@ -444,42 +480,83 @@ update_interval_ms = 4
 ;
 ; Actions: cross circle square triangle l1 r1 l2 r2 l3 r3 options create touchpad ps
 ;          dpad_up dpad_down dpad_left dpad_right ls_up ls_down ls_left ls_right
-;          rs_up rs_down rs_left rs_right walk
+;          rs_up rs_down rs_left rs_right walk vehicle_toggle
 
+; --- on foot (GTA 6 Default scheme) ---
 ls_up = W
 ls_down = S
 ls_left = A
 ls_right = D
-; Avoid Alt: on Windows, releasing Alt can open the window menu.
+; run (L3); press again to sprint
+l3 = Shift
+; slow walk (partial stick). Avoid Alt: on Windows, releasing Alt can open the window menu.
 walk = CapsLock
+; jump / climb; dodge and block in melee
+cross = Space
+; crouch (hold: rest / lean)
+circle = Ctrl
+; melee (hold: heavy attack)
+square = R
+; interact: doors, items, people; F also enters a vehicle (see vehicle_toggle)
+triangle = E, F
 
+; shoot (hold: grab / prime explosive) and aim
 r2 = MouseLeft
 l2 = MouseRight
-r3 = MouseMiddle, C
-l3 = Ctrl
-
-cross = Shift
-square = Space
-triangle = F
-circle = R
+; take cover
 r1 = Q
+; holster / draw (hold: weapon wheel)
 l1 = Tab
+; look behind (hold) / zoom while aiming; Shift + C is Focus (L3 + R3)
+r3 = C, MouseMiddle
 
-dpad_up = Up, MouseForward
-dpad_down = Down, MouseBack
-dpad_left = Left, WheelUp
-dpad_right = Right, WheelDown
+; phone (hold: WAiNK)
+dpad_up = Up
+; HUD / minimap (hold: quick navigation)
+dpad_down = Down, Z
+; radio (hold); switch shoulder while aiming
+dpad_left = Left, MouseBack
+; partner menu (hold), detonate explosives
+dpad_right = Right, G, MouseForward
 
+; map
 touchpad = M
+; pause menu
 options = Esc, P
 create = F12
 ps = Home
+
+; F enters a vehicle and switches to the [vehicle] layer; V switches layers by hand
+; (use it if the layer gets out of step, e.g. F pressed with no car nearby).
+vehicle_toggle = F, V
 
 ; keyboard camera control (fallback)
 rs_up = I
 rs_down = K
 rs_left = J
 rs_right = L
+
+[vehicle]
+; Only keys listed here change while the vehicle layer is on; a key listed here
+; does only what it does here. Every other key keeps its on-foot action, so
+; A / D steer, Space is the handbrake, Shift is horn / nitrous (L3), C looks behind.
+; accelerate
+r2 = W
+; brake / reverse
+l2 = S
+; horn / nitrous
+l3 = E
+; headlights (tap) / duck (hold)
+circle = H, Ctrl
+; radio / vehicle menu (hold), turn signal left (tap)
+dpad_left = Q, Left, MouseBack
+; drive-by shoot
+r1 = MouseLeft
+; draw sidearm (tap), vehicle weapon (hold)
+l1 = MouseRight
+; F exits the vehicle and switches back to the on-foot layer
+triangle = F
+vehicle_toggle = F
 )INI";
 }
 
