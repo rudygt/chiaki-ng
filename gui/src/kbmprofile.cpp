@@ -256,22 +256,26 @@ Profile ParseProfile(const std::string &text)
 	Profile profile;
 	IniDocument doc = IniDocument::Parse(text);
 
-	auto read_double = [&](const char *key, double *out, double min, double max) {
-		auto v = doc.Get("mouse", key);
+	auto read_double_in = [&](const char *section, const char *key, double *out, double min, double max) {
+		auto v = doc.Get(section, key);
 		if(!v)
 			return;
+		const std::string where = std::string("[") + section + "] " + key;
 		double d;
 		if(!ParseDouble(*v, &d))
 		{
-			profile.warnings.push_back(std::string("[mouse] ") + key + ": not a number: " + *v);
+			profile.warnings.push_back(where + ": not a number: " + *v);
 			return;
 		}
 		if(d < min || d > max)
 		{
-			profile.warnings.push_back(std::string("[mouse] ") + key + ": out of range, clamped: " + *v);
+			profile.warnings.push_back(where + ": out of range, clamped: " + *v);
 			d = std::clamp(d, min, max);
 		}
 		*out = d;
+	};
+	auto read_double = [&](const char *key, double *out, double min, double max) {
+		read_double_in("mouse", key, out, min, max);
 	};
 	auto read_bool = [&](const char *section, const char *key, bool *out) {
 		auto v = doc.Get(section, key);
@@ -291,6 +295,12 @@ Profile ParseProfile(const std::string &text)
 	read_double("update_interval_ms", &aim.update_interval_ms, 1.0, 50.0);
 	read_bool("mouse", "invert_y", &aim.invert_y);
 	read_bool("general", "click_to_capture", &profile.click_to_capture);
+
+	SteerConfig &steer = profile.steer;
+	read_double_in("steering", "start", &steer.start, 0.0, 1.0);
+	read_double_in("steering", "ramp_ms", &steer.ramp_ms, 0.0, 5000.0);
+	read_double_in("steering", "max", &steer.max, 0.05, 1.0);
+	steer.start = std::min(steer.start, steer.max);
 
 	auto read_bindings = [&](const char *section, std::vector<Binding> *out) {
 		for(const auto &[key, value] : doc.Entries(section))
@@ -327,6 +337,19 @@ std::array<bool, ActionCount> HeldActions(const std::vector<int> &held_inputs,
 			held[static_cast<size_t>(action)] = true;
 	}
 	return held;
+}
+
+double SteerRamp::Update(double now_ms, int direction)
+{
+	if(direction != held_direction)
+	{
+		held_direction = direction;
+		held_since_ms = now_ms;
+	}
+	if(!held_direction)
+		return 0.0;
+	double t = config.ramp_ms > 0.0 ? std::clamp((now_ms - held_since_ms) / config.ramp_ms, 0.0, 1.0) : 1.0;
+	return held_direction * (config.start + (config.max - config.start) * t);
 }
 
 bool VehicleLayer::Update(bool toggle_held)
@@ -470,6 +493,14 @@ ads_scale = 1.0
 ; Left stick deflection while the "walk" modifier is held.
 walk_scale = 0.45
 update_interval_ms = 4
+
+[steering]
+; Keyboard steering (A / D) in the vehicle layer. A steering key starts at
+; `start` and reaches `max` after being held for `ramp_ms`, so a tap nudges
+; and a hold turns hard. ramp_ms = 0 jumps straight to max.
+start = 0.3
+ramp_ms = 400
+max = 1.0
 
 [bindings]
 ; action = key[, key ...]

@@ -338,6 +338,8 @@ class StreamSession : public QObject
 		QSet<int> kbm_held_inputs;
 		kbm::PadOutput kbm_pad;
 		int16_t kbm_aim_x = 0, kbm_aim_y = 0;
+		kbm::SteerRamp kbm_steer;
+		int16_t kbm_steer_x = 0;
 		ChiakiControllerState kbm_state;
 		QTimer *kbm_timer = nullptr;
 		QElapsedTimer kbm_clock;
@@ -347,6 +349,8 @@ class StreamSession : public QObject
 		void KbmRecompute();
 		void KbmApplyState();
 		void KbmTick();
+		double KbmNowMs() const;
+		int16_t KbmSteerX(double now_ms);
 		void KbmWheelStep(KbmWheelPulse *pulse, int code);
 
 	private slots:

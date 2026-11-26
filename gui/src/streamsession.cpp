@@ -1065,6 +1065,7 @@ void StreamSession::KbmLoadProfile()
 	resolve(kbm_profile.vehicle_bindings, &kbm_vehicle_bindings);
 
 	kbm_aim.Configure(kbm_profile.aim);
+	kbm_steer.Configure(kbm_profile.steer);
 	kbm_timer->setInterval(qMax(1, static_cast<int>(std::lround(kbm_profile.aim.update_interval_ms))));
 	CHIAKI_LOGI(GetChiakiLog(), "KBM profile loaded from %s (%d inputs bound, %d in the vehicle layer)", path.constData(),
 			static_cast<int>(kbm_bindings.size()), static_cast<int>(kbm_vehicle_bindings.size()));
@@ -1116,8 +1117,22 @@ void StreamSession::KbmRecompute()
 		held = kbm::HeldActions(inputs, kbm_bindings, kbm_vehicle_bindings, kbm_vehicle.Active());
 	}
 	kbm_pad = kbm::ComputePad(held, kbm_profile.aim.walk_scale);
+	kbm_steer_x = KbmSteerX(KbmNowMs());
 	KbmApplyState();
 	SendFeedbackState();
+}
+
+double StreamSession::KbmNowMs() const
+{
+	return kbm_clock.isValid() ? static_cast<double>(kbm_clock.nsecsElapsed()) / 1e6 : 0.0;
+}
+
+// In the vehicle layer the steering keys ramp up instead of jumping to full lock.
+int16_t StreamSession::KbmSteerX(double now_ms)
+{
+	const int direction = kbm_active && kbm_vehicle.Active() ? (kbm_pad.left_x > 0) - (kbm_pad.left_x < 0) : 0;
+	const double ramp = kbm_steer.Update(now_ms, direction);
+	return static_cast<int16_t>(std::lround(ramp * std::abs(static_cast<int>(kbm_pad.left_x))));
 }
 
 void StreamSession::KbmApplyState()
@@ -1128,7 +1143,7 @@ void StreamSession::KbmApplyState()
 	kbm_state.buttons = kbm_pad.buttons;
 	kbm_state.l2_state = kbm_pad.l2;
 	kbm_state.r2_state = kbm_pad.r2;
-	kbm_state.left_x = kbm_pad.left_x;
+	kbm_state.left_x = kbm_vehicle.Active() ? kbm_steer_x : kbm_pad.left_x;
 	kbm_state.left_y = kbm_pad.left_y;
 	// right stick keys win over the mouse while they are held
 	kbm_state.right_x = kbm_pad.right_x ? kbm_pad.right_x : kbm_aim_x;
@@ -1139,12 +1154,15 @@ void StreamSession::KbmTick()
 {
 	if(!kbm_active)
 		return;
+	const double now = KbmNowMs();
 	int16_t x, y;
-	kbm_aim.Update(static_cast<double>(kbm_clock.nsecsElapsed()) / 1e6, kbm_pad.l2 > 0, &x, &y);
-	if(x == kbm_aim_x && y == kbm_aim_y)
+	kbm_aim.Update(now, kbm_pad.l2 > 0, &x, &y);
+	const int16_t steer_x = KbmSteerX(now);
+	if(x == kbm_aim_x && y == kbm_aim_y && steer_x == kbm_steer_x)
 		return;
 	kbm_aim_x = x;
 	kbm_aim_y = y;
+	kbm_steer_x = steer_x;
 	KbmApplyState();
 	SendFeedbackState();
 }

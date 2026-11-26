@@ -81,6 +81,28 @@ struct AimConfig
 	double update_interval_ms = 4.0;
 };
 
+// Keyboard steering in the vehicle layer: a steering key starts at `start` and
+// reaches `max` after `ramp_ms` held, instead of jumping to full lock.
+struct SteerConfig
+{
+	double start = 0.3;
+	double ramp_ms = 400.0; // 0 = jump straight to max
+	double max = 1.0;
+};
+
+class SteerRamp
+{
+	public:
+		void Configure(const SteerConfig &config) { this->config = config; }
+		// direction: -1 left, 0 released, +1 right. Returns the deflection in [-max, max].
+		double Update(double now_ms, int direction);
+
+	private:
+		SteerConfig config;
+		int held_direction = 0;
+		double held_since_ms = 0.0;
+};
+
 struct Binding
 {
 	std::string input; // key or mouse input name as written in the profile, e.g. "W", "MouseLeft"
@@ -90,6 +112,7 @@ struct Binding
 struct Profile
 {
 	AimConfig aim;
+	SteerConfig steer;
 	bool click_to_capture = true;
 	std::vector<Binding> bindings;
 	// Replace the on-foot actions of the inputs they name while the vehicle layer is on.

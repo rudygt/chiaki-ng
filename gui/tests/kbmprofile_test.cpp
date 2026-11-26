@@ -265,9 +265,40 @@ static void TestDefaultProfileDrivesWithW()
 	CHECK(f_toggles_in_car);
 }
 
+static void TestSteerRamp()
+{
+	SteerConfig c;
+	c.start = 0.3;
+	c.ramp_ms = 400.0;
+	c.max = 1.0;
+	SteerRamp r;
+	r.Configure(c);
+	CHECK(r.Update(0.0, 0) == 0.0);
+	// a press starts gentle and builds to full lock
+	CHECK(std::fabs(r.Update(100.0, 1) - 0.3) < 1e-9);
+	CHECK(std::fabs(r.Update(300.0, 1) - 0.65) < 1e-9);
+	CHECK(std::fabs(r.Update(500.0, 1) - 1.0) < 1e-9);
+	CHECK(std::fabs(r.Update(900.0, 1) - 1.0) < 1e-9);
+	// switching side starts over, release centers
+	CHECK(std::fabs(r.Update(1000.0, -1) + 0.3) < 1e-9);
+	CHECK(r.Update(1100.0, 0) == 0.0);
+
+	c.ramp_ms = 0.0;
+	c.max = 0.6;
+	r.Configure(c);
+	CHECK(std::fabs(r.Update(2000.0, 1) - 0.6) < 1e-9);
+
+	Profile p = ParseProfile("[steering]\nstart = 0.8\nramp_ms = 250\nmax = 0.5\n");
+	CHECK(p.warnings.empty());
+	CHECK(std::fabs(p.steer.ramp_ms - 250.0) < 1e-9);
+	CHECK(std::fabs(p.steer.max - 0.5) < 1e-9);
+	CHECK(std::fabs(p.steer.start - 0.5) < 1e-9); // never above max
+}
+
 int main()
 {
 	TestDefaultProfileParses();
+	TestSteerRamp();
 	TestVehicleLayerParsesAndOverrides();
 	TestVehicleLayerTogglesOncePerPress();
 	TestDefaultProfileDrivesWithW();
